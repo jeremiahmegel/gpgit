@@ -39,7 +39,7 @@
 gpgit="$(dirname "$0")/gpgit"
 
 if [[ -z "$1" || -z "$2" ]]; then
-	echo "Usage is ./encmaildir.sh /path/to/Maildir certificate_user@domain.com [optional arguments passed to 'find' for messages such as '-mtime 0']"
+	echo "Usage is ./encmaildir.sh /path/to/Maildir certificate_user@domain.com [optional arguments passed to 'find' for messages such as '-mtime 0'] [GnuPG homedir]"
 	exit 0
 fi
 
@@ -49,7 +49,7 @@ if [ ! -d "$1" ]; then
 fi
 
 # Does this key exist?
-gpg --list-keys "$2" > /dev/null 2>&1
+gpg --homedir "$4" --list-keys "$2" > /dev/null 2>&1
 if [ $? -gt 0 ]; then
 	echo "A GPG key for '$2' could not be found!"
 	exit 0
@@ -76,7 +76,7 @@ while IFS= read -d $'\0' -r mail; do
 
 	# This is where the magic happens
 	echo "    --gpgit--> '$tempmsg'"
-	if ! "$gpgit" "$2" < "$mail" >> "$tempmsg"; then
+	if ! "$gpgit" "--homedir" "$4" "$2" < "$mail" >> "$tempmsg"; then
 		echo "    Error:     Gpgit failed. Skipping ..." >&2
 		rm "$tempmsg"
 		continue
