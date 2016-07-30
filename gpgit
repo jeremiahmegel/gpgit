@@ -30,6 +30,7 @@ use MIME::Parser;
   my $encrypt_mode   = 'pgpmime';
   my $homedir        = '';
   my $inline_flatten = 0;
+  my $retain_dkim    = 0;
   my @recipients     = ();
   {
      help() unless @ARGV;
@@ -50,6 +51,8 @@ use MIME::Parser;
 	   }
 	} elsif( $key eq '--inline-flatten' ){
            $inline_flatten = 1;
+	} elsif( $key eq '--retain-dkim' ){
+           $retain_dkim = 1;
 	} elsif( $key =~ /^.+\@.+$/ ){
 	   push @recipients, $key;
 	} else {
@@ -168,7 +171,9 @@ use MIME::Parser;
   }
 
 ## Remove some headers which might have been broken by the process of encryption
-  $mime->head()->delete($_) foreach qw( DKIM-Signature DomainKey-Signature );
+  unless( $retain_dkim ){
+     $mime->head()->delete($_) foreach qw( DKIM-Signature DomainKey-Signature );
+  }
 
 ## Print out the encrypted version
   print $mime->stringify;
@@ -299,6 +304,10 @@ I believe them to be safe(ish):
     referring to them, and so they *should* be redundant. We don't just
     remove image parts, we only remove "related" image parts that are
     referred by using CID URLs pointing at their Content-Id headers.
+
+  --retain-dkim
+
+Do not strip DKIM/DomainKeys signature headers.
 END_HELP
   exit 0;
 }
