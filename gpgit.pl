@@ -27,8 +27,8 @@ use MIME::Parser;
 
 ## Parse args
   my $encrypt_mode   = 'pgpmime';
-  my $signing_key = '';
-  my $passphrase = '';
+  my $sign_key = '';
+  my $sign_pass = '';
   my $inline_flatten = 0;
   my $skip_smime     = 0;
   my $skip_ms_bug  = 0;
@@ -42,18 +42,18 @@ use MIME::Parser;
 	   help();
 	} elsif( $key eq '--encrypt-mode' ){
 	   $encrypt_mode = shift @args;
-	   unless( defined $encrypt_mode && grep( $encrypt_mode eq $_, 'prefer-inline', 'pgpmime', 'pgpmine-sign', 'inline-or-plain' ) ){
+	   unless( defined $encrypt_mode && grep( $encrypt_mode eq $_, 'prefer-inline', 'pgpmime', 'pgpmime-sign', 'inline-or-plain' ) ){
 	      die "Bad value for --encrypt-mode\n";
 	   }
-    } elsif( $key eq '--siging-key' ){
-	   $signing_key = shift @args;
-	   unless( defined $signing_key ){
-	      die "Bad value for --siging-key\n";
+    } elsif( $key eq '--sign-key' ){
+	   $sign_key = shift @args;
+	   unless( defined $sign_key ){
+	      die "Bad value for --sign-key\n";
 	   }
-    } elsif( $key eq '--passphrase' ){
-	   $passphrase = shift @args;
-	   unless( defined $passphrase ){
-	      die "Bad value for --passphrase\n";
+    } elsif( $key eq '--sign-pass' ){
+	   $sign_pass = shift @args;
+	   unless( defined $sign_pass ){
+	      die "Bad value for --sign-pass\n";
 	   }
 	} elsif( $key eq '--inline-flatten' ){
            $inline_flatten = 1;
@@ -188,7 +188,7 @@ use MIME::Parser;
      if( $encrypt_mode eq 'pgpmime' ){
         $code = $gpg->mime_encrypt( $mime, @recipients );
      } elsif( $encrypt_mode eq 'pgpmime-sign' ){
-        $code = $gpg->mime_sign_encrypt( $mime, @recipients, $signing_key, $passphrase );
+        $code = $gpg->mime_sign_encrypt( $mime, @recipients, $sign_key, $sign_pass );
      } elsif( $encrypt_mode eq 'prefer-inline' ){
         $mime->make_singlepart;
         $code = $mime->mime_type =~ /^text\/plain/
@@ -311,21 +311,21 @@ Optional arguments:
 
 Display this usage information.
 
-  --encrypt-mode prefer-inline / pgpmime / pgpmine-sign / inline-or-plain
+  --encrypt-mode prefer-inline / pgpmime / pgpmime-sign / inline-or-plain
 
 Single part text emails can be encrypted inline, or using PGP/MIME. Multi-part
 emails can only be encrypted using PGP/MIME. "pgpmime" is the default for this
-argument and means we will always use PGP/MIME. "pgpmine-sign" will also sign 
+argument and means we will always use PGP/MIME. "pgpmime-sign" will also sign 
 the messages, but requres that a signing key and passphrase be set. 
 "prefer-inline" means that we will use inline if possible, and PGP/MIME if not.
 "inline-or-plain" will use inline encryption for single part emails, and no 
 encryption for multi-part emails.
 
-  --signing-key
+  --sign-key
 
-Set this if you would like to sign PGP/MIME encrypted messages.
+Set this if you have set encryption mode to 'pgpmime-sign'.
 
-  --passphrase
+  --sign-pass
 
 Set this if you have set a signing key and that key requires a passphrase.
 
