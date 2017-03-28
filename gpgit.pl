@@ -34,43 +34,43 @@ use MIME::Parser;
   my $skip_ms_bug  = 0;
   my @recipients     = ();
   {
-    help() unless @ARGV;
-    my @args = @ARGV;
-    while( @args ){
-      my $key = shift @args;
-      if( $key eq '--help' || $key eq '-h' ){
-        help();
-      } elsif( $key eq '--encrypt-mode' ){
-        $encrypt_mode = shift @args;
-        unless( defined $encrypt_mode && grep( $encrypt_mode eq $_, 'prefer-inline', 'pgpmime', 'pgpmime-sign', 'inline-or-plain' ) ){
-          die "Bad value for --encrypt-mode\n";
-        }
-      } elsif( $key eq '--sign-key' ){
-        $sign_key = shift @args;
-        unless( defined $sign_key ){
-          die "Bad value for --sign-key\n";
-        }
-      } elsif( $key eq '--sign-pass' ){
-        $sign_pass = shift @args;
-        unless( defined $sign_pass ){
-          die "Bad value for --sign-pass\n";
-        }
-      } elsif( $key eq '--inline-flatten' ){
-        $inline_flatten = 1;
-      } elsif( $key eq '--skip-smime' ){
-        $skip_smime = 1;
-      } elsif( $key eq '--skip-ms-bug' ){
-        $skip_ms_bug = 1;
-      } elsif( $key =~ /^.+\@.+$/ ){
-        push @recipients, $key;
-      } else {
-        die "Bad argument: $key\n";
-      }
-    }
-    die "Missing recipients\n" unless @recipients;
-    if( $inline_flatten && $encrypt_mode eq 'pgpmime' ){
-      die "inline-flatten option makes no sense with \"pgpmime\" encrypt-mode. See --help\n"
-    }
+     help() unless @ARGV;
+     my @args = @ARGV;
+     while( @args ){
+        my $key = shift @args;
+	if( $key eq '--help' || $key eq '-h' ){
+	   help();
+	} elsif( $key eq '--encrypt-mode' ){
+	   $encrypt_mode = shift @args;
+	   unless( defined $encrypt_mode && grep( $encrypt_mode eq $_, 'prefer-inline', 'pgpmime', 'pgpmime-sign', 'inline-or-plain' ) ){
+	      die "Bad value for --encrypt-mode\n";
+	   }
+	} elsif( $key eq '--sign-key' ){
+	   $sign_key = shift @args;
+	   unless( defined $sign_key ){
+	      die "Bad value for --sign-key\n";
+	   }
+	} elsif( $key eq '--sign-pass' ){
+	   $sign_pass = shift @args;
+	   unless( defined $sign_pass ){
+	      die "Bad value for --sign-pass\n";
+	   }
+	} elsif( $key eq '--inline-flatten' ){
+           $inline_flatten = 1;
+	} elsif( $key eq '--skip-smime' ){
+           $skip_smime = 1;
+	} elsif( $key eq '--skip-ms-bug' ){
+           $skip_ms_bug = 1;
+	} elsif( $key =~ /^.+\@.+$/ ){
+	   push @recipients, $key;
+	} else {
+           die "Bad argument: $key\n";
+	}
+     }
+     die "Missing recipients\n" unless @recipients;
+     if( $inline_flatten && $encrypt_mode eq 'pgpmime' ){
+        die "inline-flatten option makes no sense with \"pgpmime\" encrypt-mode. See --help\n"
+     }
   }
 
 ## Set the home environment variable from the user running the script
@@ -82,108 +82,108 @@ use MIME::Parser;
     $gpg = new Mail::GnuPG( key => $sign_key, passphrase => $sign_pass, always_trust => 1 );
   }
 
-  ## Make sure we have the appropriate public key for all recipients
-    foreach( @recipients ){
-       unless( $gpg->has_public_key( $_ ) ){
-          while(<STDIN>){
-             print;
-          }
-          exit 0;
-       }
-    }
+## Make sure we have the appropriate public key for all recipients
+  foreach( @recipients ){
+     unless( $gpg->has_public_key( $_ ) ){
+        while(<STDIN>){
+           print;
+        }
+        exit 0;
+     }
+  }
 
-  ## Read the plain text email
-    my $plain;
-    {
-       local $/ = undef;
-       $plain = <STDIN>;
-    }
+## Read the plain text email
+  my $plain;
+  {
+     local $/ = undef;
+     $plain = <STDIN>;
+  }
 
-  ## Parse the email
-    my $mime;
-    {
-       my $parser = new MIME::Parser();
-       $parser->decode_bodies(1);
-       $parser->output_to_core(1);
-       $mime = $parser->parse_data( $plain );
-    }
+## Parse the email
+  my $mime;
+  {
+     my $parser = new MIME::Parser();
+     $parser->decode_bodies(1);
+     $parser->output_to_core(1);
+     $mime = $parser->parse_data( $plain );
+  }
 
-  ## Test if it is already encrypted
-    if( $gpg->is_encrypted( $mime ) ){
-       print $plain; exit 0;
-    }
+## Test if it is already encrypted
+  if( $gpg->is_encrypted( $mime ) ){
+     print $plain; exit 0;
+  }
 
-  ## Test if the email is S/MIME encrypted - already encrypted if so
-    if( $skip_smime ) {
-      if( $mime->mime_type =~ /^application\/pkcs7-mime/ ){
+## Test if the email is S/MIME encrypted - already encrypted if so
+  if( $skip_smime ) {
+    if( $mime->mime_type =~ /^application\/pkcs7-mime/ ){
+      print $plain; exit 0;
+    }
+  }
+
+## Detect broken MS Exchange PGP/MIME messages
+## All that is needed here is to detect them and pass them through
+## as Enigmail will compensate for the brokenness. Ideally one day
+## this script could patch up the emails, its not super difficult.
+  if( $skip_ms_bug ) {
+    ## Exchange turns multipart/encrypted into multipart/mixed
+    if( $mime->mime_type =~ /^multipart\/mixed/) {
+      my $seen_pgp_id = 0;
+      for (my $i=0; $i < $mime->parts; $i++) {
+        my $part = $mime->parts($i);
+        my $header = $part->head();
+        ## test for a part with pgp-encrypted PGP/MIME identification file
+        if( $part->mime_type =~ /^application\/pgp-encrypted$/ &&
+            $header->recommended_filename =~ /^PGP.*MIME.*[Ii]dentification$/ ) {
+          $seen_pgp_id = 1;
+          last;
+        }
+      }
+      if( $seen_pgp_id ) {
+        ## this is a buggy ms exchange pgp/mime
         print $plain; exit 0;
       }
     }
+  }
 
-  ## Detect broken MS Exchange PGP/MIME messages
-  ## All that is needed here is to detect them and pass them through
-  ## as Enigmail will compensate for the brokenness. Ideally one day
-  ## this script could patch up the emails, its not super difficult.
-    if( $skip_ms_bug ) {
-      ## Exchange turns multipart/encrypted into multipart/mixed
-      if( $mime->mime_type =~ /^multipart\/mixed/) {
-        my $seen_pgp_id = 0;
-        for (my $i=0; $i < $mime->parts; $i++) {
-          my $part = $mime->parts($i);
-          my $header = $part->head();
-          ## test for a part with pgp-encrypted PGP/MIME identification file
-          if( $part->mime_type =~ /^application\/pgp-encrypted$/ &&
-              $header->recommended_filename =~ /^PGP.*MIME.*[Ii]dentification$/ ) {
-            $seen_pgp_id = 1;
-            last;
-          }
+
+## If the user has specified that they prefer/need inline encryption, instead of PGP/MIME, and the email is multipart, then
+## we need to attempt to flatten the message down into a single text/plain part. There are a couple of safe'ish lossy ways of
+## doing this:
+##
+## Removing text/html from multipart/alternative entities that also have a text/plain part
+##   In this scenario, the two text parts are *supposed* to contain the same content. So it should be ok to strip the html part.
+##   We only do this if the text/plain part contains at least 10 characters of data.
+##
+## Removing images from multipart/related entities when they are referred to from a HTML part
+##   We'll be stripping the HTML parts, so if those HTML parts use a CID URL to refer to a related image, we may as well strip
+##   those images too as they will no longer be used in the display of the email
+
+  if( $inline_flatten ){
+     if( $encrypt_mode eq 'prefer-inline' || $encrypt_mode eq 'inline-or-plain' ){
+        if( $mime->mime_type =~ /^multipart\/(alternative|related)$/ ){
+
+           ## We're going to try several things to flatten the email to a single text/plain part. We want to work on a duplicate
+	   ## version of the message so we can fall back to the original if we don't manage to flatten all the way
+             my $new_mime = $mime->dup;
+
+           ## Remember the original MIME structure so we can add it to an information header
+             my $orig_mime_structure = mime_structure( $mime );
+
+	   ## We may already be able to safely flatten, if we have a multipart/x message with only a single child part. Unlikely
+             $new_mime->make_singlepart;
+
+           ## multipart/related
+             flatten_related( $new_mime     ) if $new_mime->mime_type eq 'multipart/related';
+             flatten_alternative( $new_mime ) if $new_mime->mime_type eq 'multipart/alternative';
+
+           ## Keep the new message if it was succesfully flattened
+             if( $new_mime->mime_type !~ /^multipart\// ){
+                $new_mime->head->add('X-GPGIT-Flattened-From', $orig_mime_structure );
+                $mime = $new_mime;
+             }
         }
-        if( $seen_pgp_id ) {
-          ## this is a buggy ms exchange pgp/mime
-          print $plain; exit 0;
-        }
-      }
-    }
-
-
-  ## If the user has specified that they prefer/need inline encryption, instead of PGP/MIME, and the email is multipart, then
-  ## we need to attempt to flatten the message down into a single text/plain part. There are a couple of safe'ish lossy ways of
-  ## doing this:
-  ##
-  ## Removing text/html from multipart/alternative entities that also have a text/plain part
-  ##   In this scenario, the two text parts are *supposed* to contain the same content. So it should be ok to strip the html part.
-  ##   We only do this if the text/plain part contains at least 10 characters of data.
-  ##
-  ## Removing images from multipart/related entities when they are referred to from a HTML part
-  ##   We'll be stripping the HTML parts, so if those HTML parts use a CID URL to refer to a related image, we may as well strip
-  ##   those images too as they will no longer be used in the display of the email
-
-    if( $inline_flatten ){
-       if( $encrypt_mode eq 'prefer-inline' || $encrypt_mode eq 'inline-or-plain' ){
-          if( $mime->mime_type =~ /^multipart\/(alternative|related)$/ ){
-
-             ## We're going to try several things to flatten the email to a single text/plain part. We want to work on a duplicate
-  	   ## version of the message so we can fall back to the original if we don't manage to flatten all the way
-               my $new_mime = $mime->dup;
-
-             ## Remember the original MIME structure so we can add it to an information header
-               my $orig_mime_structure = mime_structure( $mime );
-
-  	   ## We may already be able to safely flatten, if we have a multipart/x message with only a single child part. Unlikely
-               $new_mime->make_singlepart;
-
-             ## multipart/related
-               flatten_related( $new_mime     ) if $new_mime->mime_type eq 'multipart/related';
-               flatten_alternative( $new_mime ) if $new_mime->mime_type eq 'multipart/alternative';
-
-             ## Keep the new message if it was succesfully flattened
-               if( $new_mime->mime_type !~ /^multipart\// ){
-                  $new_mime->head->add('X-GPGIT-Flattened-From', $orig_mime_structure );
-                  $mime = $new_mime;
-               }
-          }
-       }
-    }
+     }
+  }
 
 ## Encrypt
   {
@@ -332,6 +332,7 @@ Set this if you have set encryption mode to 'pgpmime-sign'.
 
 Set this if you have set a signing key and that key requires a passphrase.
 
+
   --inline-flatten
 
 Only makes sense when using an "inline" encrypt-mode. When you enable this
@@ -340,16 +341,16 @@ email, so inline encryption can be used. The methods we use are "lossy", but
 I believe them to be safe(ish):
 
 1.) When we find a multipart/alternative part which contains two parts: A
-text/plain part with at least 10 characters in it, and a text/html part,
-we remove the text/html part. The text/plain part *should* contain the
-same content as the text/html part, but without the HTML markup.
+    text/plain part with at least 10 characters in it, and a text/html part,
+    we remove the text/html part. The text/plain part *should* contain the
+    same content as the text/html part, but without the HTML markup.
 
 2.) When we find a multipart/related part which contains image parts which
-are referred to from a HTML part via CID URLs, we remove those images.
-We can do this, because we will be removing the HTML parts that are
-referring to them, and so they *should* be redundant. We don't just
-remove image parts, we only remove "related" image parts that are
-referred by using CID URLs pointing at their Content-Id headers.
+    are referred to from a HTML part via CID URLs, we remove those images.
+    We can do this, because we will be removing the HTML parts that are
+    referring to them, and so they *should* be redundant. We don't just
+    remove image parts, we only remove "related" image parts that are
+    referred by using CID URLs pointing at their Content-Id headers.
 
   --skip-smime
 
