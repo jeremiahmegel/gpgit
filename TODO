@@ -4,10 +4,8 @@ it. Patches welcome.
 
 1.) Use Key IDs interchangeably with email addresses
 
-2.) Optionally support signing as well as encrypting.
+2.) Add ability to store a signing password in a file.
 
-  --sign-key       "The email address or key id to sign with"
-  --sign-pass      "The password for the secret signing key"
   --sign-pass-file "Path to file containing password for the secret signing key"
 
 3.) If there are no recipients, should we just output the original message and

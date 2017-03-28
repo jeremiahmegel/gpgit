@@ -302,68 +302,68 @@ sub mime_structure {
 
 sub help {
   print << "END_HELP";
-  Usage: gpgit.pl recipient1 recipient2
+Usage: gpgit.pl recipient1 recipient2
 
-  Gpgit takes a list of email addresses as its arguments. The email is encrypted
-  using the public keys associated with those email addresses. Those public keys
-  *MUST* have been assigned "Ultimate" trust or it wont work.
+Gpgit takes a list of email addresses as its arguments. The email is encrypted
+using the public keys associated with those email addresses. Those public keys
+*MUST* have been assigned "Ultimate" trust or it wont work.
 
-  Optional arguments:
+Optional arguments:
 
   --help or -h
 
-  Display this usage information.
+Display this usage information.
 
   --encrypt-mode prefer-inline / pgpmime / pgpmime-sign / inline-or-plain
 
-  Single part text emails can be encrypted inline, or using PGP/MIME. Multi-part
-  emails can only be encrypted using PGP/MIME. "pgpmime" is the default for this
-  argument and means we will always use PGP/MIME. "pgpmime-sign" will also sign
-  the messages, but requres that a signing key and passphrase be set.
-  "prefer-inline" means that we will use inline if possible, and PGP/MIME if not.
-  "inline-or-plain" will use inline encryption for single part emails, and no
-  encryption for multi-part emails.
+Single part text emails can be encrypted inline, or using PGP/MIME. Multi-part
+emails can only be encrypted using PGP/MIME. "pgpmime" is the default for this
+argument and means we will always use PGP/MIME. "pgpmime-sign" will also sign
+the messages, but requres that a signing key and passphrase be set.
+"prefer-inline" means that we will use inline if possible, and PGP/MIME if not.
+"inline-or-plain" will use inline encryption for single part emails, and no
+encryption for multi-part emails.
 
   --sign-key
 
-  Set this if you have set encryption mode to 'pgpmime-sign'.
+Set this if you have set encryption mode to 'pgpmime-sign'.
 
   --sign-pass
 
-  Set this if you have set a signing key and that key requires a passphrase.
+Set this if you have set a signing key and that key requires a passphrase.
 
   --inline-flatten
 
-  Only makes sense when using an "inline" encrypt-mode. When you enable this
-  option, we attempt to convert multipart emails to a single part text/plain
-  email, so inline encryption can be used. The methods we use are "lossy", but
-  I believe them to be safe(ish):
+Only makes sense when using an "inline" encrypt-mode. When you enable this
+option, we attempt to convert multipart emails to a single part text/plain
+email, so inline encryption can be used. The methods we use are "lossy", but
+I believe them to be safe(ish):
 
-  1.) When we find a multipart/alternative part which contains two parts: A
-  text/plain part with at least 10 characters in it, and a text/html part,
-  we remove the text/html part. The text/plain part *should* contain the
-  same content as the text/html part, but without the HTML markup.
+1.) When we find a multipart/alternative part which contains two parts: A
+text/plain part with at least 10 characters in it, and a text/html part,
+we remove the text/html part. The text/plain part *should* contain the
+same content as the text/html part, but without the HTML markup.
 
-  2.) When we find a multipart/related part which contains image parts which
-  are referred to from a HTML part via CID URLs, we remove those images.
-  We can do this, because we will be removing the HTML parts that are
-  referring to them, and so they *should* be redundant. We don't just
-  remove image parts, we only remove "related" image parts that are
-  referred by using CID URLs pointing at their Content-Id headers.
+2.) When we find a multipart/related part which contains image parts which
+are referred to from a HTML part via CID URLs, we remove those images.
+We can do this, because we will be removing the HTML parts that are
+referring to them, and so they *should* be redundant. We don't just
+remove image parts, we only remove "related" image parts that are
+referred by using CID URLs pointing at their Content-Id headers.
 
   --skip-smime
 
-  Use this option to not encrypt a message that is already encrypted with
-  S/MIME. This is very useful if you have both PGP and S/MIME encryption
-  for the same email account.
+Use this option to not encrypt a message that is already encrypted with
+S/MIME. This is very useful if you have both PGP and S/MIME encryption
+for the same email account.
 
   --skip-ms-bug
 
-  MS Exchange servers are known to corrupt PGP/MIME messages by changing
-  content-type and nesting MIME parts. Use this option to enable detection
-  of buggy Exchange PGP/MIME messages and pass them through. Enigmail will
-  fix these messages.
+MS Exchange servers are known to corrupt PGP/MIME messages by changing
+content-type and nesting MIME parts. Use this option to enable detection
+of buggy Exchange PGP/MIME messages and pass them through. Enigmail will
+fix these messages.
 
-  END_HELP
+END_HELP
   exit 0;
 }
