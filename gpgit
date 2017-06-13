@@ -31,6 +31,10 @@ use MIME::Parser;
   my $homedir        = '';
   my $inline_flatten = 0;
   my $retain_dkim    = 0;
+  my $sign_key = '';
+  my $sign_pass = '';
+  my $skip_smime     = 0;
+  my $skip_ms_bug  = 0;
   my @recipients     = ();
   {
      help() unless @ARGV;
@@ -41,7 +45,7 @@ use MIME::Parser;
 	   help();
 	} elsif( $key eq '--encrypt-mode' ){
 	   $encrypt_mode = shift @args;
-	   unless( defined $encrypt_mode && grep( $encrypt_mode eq $_, 'prefer-inline', 'pgpmime', 'inline-or-plain' ) ){
+	   unless( defined $encrypt_mode && grep( $encrypt_mode eq $_, 'prefer-inline', 'pgpmime', 'pgpmime-sign', 'inline-or-plain' ) ){
 	      die "Bad value for --encrypt-mode\n";
 	   }
 	} elsif( $key eq '--homedir' ){
@@ -53,6 +57,20 @@ use MIME::Parser;
            $inline_flatten = 1;
 	} elsif( $key eq '--retain-dkim' ){
            $retain_dkim = 1;
+	} elsif( $key eq '--sign-key' ){
+	   $sign_key = shift @args;
+	   unless( defined $sign_key ){
+	      die "Bad value for --sign-key\n";
+	   }
+	} elsif( $key eq '--sign-pass' ){
+	   $sign_pass = shift @args;
+	   unless( defined $sign_pass ){
+	      die "Bad value for --sign-pass\n";
+	   }
+	} elsif( $key eq '--skip-smime' ){
+           $skip_smime = 1;
+	} elsif( $key eq '--skip-ms-bug' ){
+           $skip_ms_bug = 1;
 	} elsif( $key =~ /^.+\@.+$/ ){
 	   push @recipients, $key;
 	} else {
@@ -72,7 +90,10 @@ use MIME::Parser;
   $REAL_USER_ID = $EFFECTIVE_USER_ID;
 
 ## Object for GPG encryption
-  my $gpg = new Mail::GnuPG( keydir => $homedir );
+  my $gpg = new Mail::GnuPG( keydir => $homedir, always_trust => 1 );
+  if( $encrypt_mode eq 'pgpmime-sign' ){
+    $gpg = new Mail::GnuPG( keydir => $homedir, key => $sign_key, passphrase => $sign_pass, always_trust => 1 );
+  }
 
 ## Make sure we have the appropriate public key for all recipients
   foreach( @recipients ){
@@ -104,6 +125,39 @@ use MIME::Parser;
   if( $gpg->is_encrypted( $mime ) ){
      print $plain; exit 0;
   }
+
+## Test if the email is S/MIME encrypted - already encrypted if so
+  if( $skip_smime ) {
+    if( $mime->mime_type =~ /^application\/pkcs7-mime/ ){
+      print $plain; exit 0;
+    }
+  }
+
+## Detect broken MS Exchange PGP/MIME messages
+## All that is needed here is to detect them and pass them through
+## as Enigmail will compensate for the brokenness. Ideally one day
+## this script could patch up the emails, its not super difficult.
+  if( $skip_ms_bug ) {
+    ## Exchange turns multipart/encrypted into multipart/mixed
+    if( $mime->mime_type =~ /^multipart\/mixed/) {
+      my $seen_pgp_id = 0;
+      for (my $i=0; $i < $mime->parts; $i++) {
+        my $part = $mime->parts($i);
+        my $header = $part->head();
+        ## test for a part with pgp-encrypted PGP/MIME identification file
+        if( $part->mime_type =~ /^application\/pgp-encrypted$/ &&
+            $header->recommended_filename =~ /^PGP.*MIME.*[Ii]dentification$/ ) {
+          $seen_pgp_id = 1;
+          last;
+        }
+      }
+      if( $seen_pgp_id ) {
+        ## this is a buggy ms exchange pgp/mime
+        print $plain; exit 0;
+      }
+    }
+  }
+
 
 ## If the user has specified that they prefer/need inline encryption, instead of PGP/MIME, and the email is multipart, then
 ## we need to attempt to flatten the message down into a single text/plain part. There are a couple of safe'ish lossy ways of
@@ -150,6 +204,8 @@ use MIME::Parser;
      $mime->head->add('X-Gpgit-Executed', 'True' );
      if( $encrypt_mode eq 'pgpmime' ){
         $code = $gpg->mime_encrypt( $mime, @recipients );
+     } elsif( $encrypt_mode eq 'pgpmime-sign' ){
+        $code = $gpg->mime_signencrypt( $mime, @recipients );
      } elsif( $encrypt_mode eq 'prefer-inline' ){
         $mime->make_singlepart;
         $code = $mime->mime_type =~ /^text\/plain/
@@ -265,7 +321,8 @@ sub help {
 Usage: gpgit.pl recipient1 recipient2
 
 Gpgit takes a list of email addresses as its arguments. The email is encrypted
-using the public keys associated with those email addresses.
+using the public keys associated with those email addresses. Those public keys
+*MUST* have been assigned "Ultimate" trust or it wont work.
 
 Optional arguments:
 
@@ -273,14 +330,24 @@ Optional arguments:
 
 Display this usage information.
 
-  --encrypt-mode prefer-inline / pgpmime / inline-or-plain
+  --encrypt-mode prefer-inline / pgpmime / pgpmime-sign / inline-or-plain
 
 Single part text emails can be encrypted inline, or using PGP/MIME. Multi-part
 emails can only be encrypted using PGP/MIME. "pgpmime" is the default for this
-argument and means we will always use PGP/MIME. "prefer-inline" means that we
-will use inline if possible, and PGP/MIME if not. "inline-or-plain" will use
-inline encryption for single part emails, and no encryption for multi-part
-emails.
+argument and means we will always use PGP/MIME. "pgpmime-sign" will also sign
+the messages, but requres that a signing key and passphrase be set.
+"prefer-inline" means that we will use inline if possible, and PGP/MIME if not.
+"inline-or-plain" will use inline encryption for single part emails, and no
+encryption for multi-part emails.
+
+  --sign-key
+
+Set this if you have set encryption mode to 'pgpmime-sign'.
+
+  --sign-pass
+
+Set this if you have set a signing key and that key requires a passphrase.
+
 
   --homedir /path/to/homedir
 
@@ -293,7 +360,7 @@ option, we attempt to convert multipart emails to a single part text/plain
 email, so inline encryption can be used. The methods we use are "lossy", but
 I believe them to be safe(ish):
 
-1.) When we find a multipart/alternative part which contains two parts: A 
+1.) When we find a multipart/alternative part which contains two parts: A
     text/plain part with at least 10 characters in it, and a text/html part,
     we remove the text/html part. The text/plain part *should* contain the
     same content as the text/html part, but without the HTML markup.
@@ -308,6 +375,19 @@ I believe them to be safe(ish):
   --retain-dkim
 
 Do not strip DKIM/DomainKeys signature headers.
+
+  --skip-smime
+
+Use this option to not encrypt a message that is already encrypted with
+S/MIME. This is very useful if you have both PGP and S/MIME encryption
+for the same email account.
+
+  --skip-ms-bug
+
+MS Exchange servers are known to corrupt PGP/MIME messages by changing
+content-type and nesting MIME parts. Use this option to enable detection
+of buggy Exchange PGP/MIME messages and pass them through. Enigmail will
+fix these messages.
 END_HELP
   exit 0;
 }
