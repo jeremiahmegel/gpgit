@@ -122,7 +122,7 @@ use MIME::Parser;
   }
 
 ## Test if it is already encrypted
-  if( $gpg->is_encrypted( $mime ) ){
+  if( $gpg->is_encrypted( $mime ) || $gpg->is_signed( $mime ) ){
      print $plain; exit 0;
   }
 
